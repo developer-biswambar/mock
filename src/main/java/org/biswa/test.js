@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Tree, NodeModel } from "@minoru/react-dnd-treeview";
-import "@minoru/react-dnd-treeview/dist/style.css";
+import FileTree from "@nosferatu500/react-file-tree";
+import "@nosferatu500/react-file-tree/dist/style.css";
 
 const FileSystemViewer = () => {
   const [fileData, setFileData] = useState([]);
@@ -19,9 +19,9 @@ const FileSystemViewer = () => {
         // Ensure only two levels
         const formattedData = data.map((item) => ({
           id: item.id,
-          parent: item.parentId || 0,
-          text: item.name,
-          droppable: item.type === "folder",
+          name: item.name,
+          isFolder: item.type === "folder",
+          children: item.children || [],
         }));
         setFileData(formattedData);
         setLoading(false);
@@ -38,12 +38,7 @@ const FileSystemViewer = () => {
   return (
     <div>
       <h2>File System Viewer</h2>
-      <Tree
-        tree={fileData}
-        rootId={0}
-        render={(node) => <span>{node.text}</span>}
-        enableDragAndDrop={false}
-      />
+      <FileTree files={fileData} />
     </div>
   );
 };
