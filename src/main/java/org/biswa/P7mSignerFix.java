@@ -79,5 +79,6 @@ public class P7mSignerFix {
         // Write to file
         Files.write(Paths.get(outputPath), signedData.getEncoded());
         System.out.println("PKCS#7 Signed File Created: " + outputPath);
+        //openssl smime -verify -in yourfile.p7m -inform DER -out original_data.txt -CAfile publickey.pem
     }
 }
