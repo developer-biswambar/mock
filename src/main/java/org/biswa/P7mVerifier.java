@@ -1,52 +1,64 @@
-package org.biswa;
-
-import org.bouncycastle.cert.X509CertificateHolder;
-import org.bouncycastle.cms.*;
-import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
-import org.bouncycastle.openssl.PEMParser;
-import org.bouncycastle.util.Store;
+import org.bouncycastle.cms.CMSSignedData;
+import org.bouncycastle.cms.CMSSignedDataGenerator;
+import org.bouncycastle.cms.jcajce.JcaContentSignerBuilder;
+import org.bouncycastle.cms.jcajce.JcaDigestCalculatorProviderBuilder;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.DigestCalculator;
+import org.bouncycastle.operator.DigestCalculatorProvider;
+import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 
 import java.io.File;
-import java.io.FileReader;
-import java.security.PublicKey;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.security.Security;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.util.Iterator;
 
-public class P7mVerifier {
+public class P7MCreator {
+    public static void main(String[] args) throws Exception {
+        // Add Bouncy Castle provider
+        Security.addProvider(new BouncyCastleProvider());
 
-    private X509Certificate x509Certificate;
+        // Load signer's certificate
+        X509Certificate signerCert = loadCertificate("signer_cert.pem");
 
-    public  boolean verifyP7mFile(String p7mFilePath) throws Exception {
-        // Load the public key from the PEM file
+        // Load original content
+        byte[] originalContent = loadFile("original_content.txt");
 
-        // Load the .p7m file containing the PKCS#7 signature
-        CMSSignedData signedData = loadSignedData(p7mFilePath);
+        // Load externally signed hash
+        byte[] signedHash = loadFile("externally_signed_hash.bin");
 
-        // Retrieve signer information from the CMSSignedData object
-        SignerInformationStore signerStore = signedData.getSignerInfos();
+        // Create CMS signed data generator
+        CMSSignedDataGenerator cmsSignedDataGenerator = new CMSSignedDataGenerator();
 
-        // Loop through each signer and verify the signature
-        for (SignerInformation signerInfo : signerStore.getSigners()) {
-            // Verify the signature using the public key
-            if (signerInfo.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider("BC").build(x509Certificate.getPublicKey()))) {
-                System.out.println("Signature is valid, the document is not tampered.");
-                return true;
-            } else {
-                System.out.println("Signature verification failed.");
-                return false;
-            }
-        }
+        // Add signer information
+        JcaContentSignerBuilder contentSignerBuilder = new JcaContentSignerBuilder("SHA256withRSA").setProvider("BC");
+        ContentSigner contentSigner = contentSignerBuilder.build(signerCert.getPublicKey());
+        cmsSignedDataGenerator.addSignerInfoGenerator(new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider("BC").build()).build(contentSigner, signerCert));
 
-        return false; // No signer found
+        // Create CMS signed data
+        CMSSignedData cmsSignedData = cmsSignedDataGenerator.generate(new CMSProcessableByteArray(originalContent), false);
+
+        // Inject externally signed hash
+        SignerInformationStore signerInformationStore = cmsSignedData.getSignerInfos();
+        SignerInformation signerInformation = signerInformationStore.getSigners().iterator().next();
+        signerInformation = new SignerInformation(signerInformation.getSID(), signerInformation.getDigestAlgorithmID(), signedHash);
+
+        // Update signer information store
+        signerInformationStore = new SignerInformationStore();
+        signerInformationStore.add(signerInformation);
+
+        // Re-encode updated CMS signed data
+        cmsSignedData = new CMSSignedData(cmsSignedData.getEncoded(), signerInformationStore);
+
+        // Save CMS signed data to file
+        saveCmsSignedData(cmsSignedData, "created_p7m_file.p7m");
     }
 
-
-    // Helper function to load signed data from a .p7m file
-    private  CMSSignedData loadSignedData(String p7mFilePath) throws Exception {
-        File file = new File(p7mFilePath);
-        byte[] signedDataBytes = java.nio.file.Files.readAllBytes(file.toPath());
-
-        return new CMSSignedData(signedDataBytes);
-    }
-
+    // Helper methods for loading certificate, file, and saving CMS signed data
 }
